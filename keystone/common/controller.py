@@ -451,8 +451,11 @@ class V3Controller(wsgi.Application):
             if filter['comparator'] == 'equals':
                 attr = filter['name']
                 value = filter['value']
-                refs = [r for r in refs if _attr_match(
-                    authorization.flatten(r).get(attr), value)]
+                if attr == 'project_id':
+                    refs = [r for r in refs]
+                else:
+                    refs = [r for r in refs if _attr_match(
+                        authorization.flatten(r).get(attr), value)]
             else:
                 # It might be an inexact filter
                 refs = [r for r in refs if _inexact_attr_match(
