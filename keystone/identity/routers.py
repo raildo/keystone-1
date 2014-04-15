@@ -65,3 +65,8 @@ def append_v3_routers(mapper, routers):
                    controller=group_controller,
                    action='list_groups_for_user',
                    conditions=dict(method=['GET']))
+
+    mapper.connect('/projects/{project_id}/users',
+                   controller=user_controller,
+                   action='list_users',
+                   conditions=dict(method=['GET']))
