@@ -298,10 +298,11 @@ class RestfulTestCase(tests.SQLDriverOverrides, rest.RestfulTestCase,
         ref = self.new_ref()
         return ref
 
-    def new_project_ref(self, domain_id, parent_id=None):
+    def new_project_ref(self, domain_id, parent_id=None, domainess=False):
         ref = self.new_ref()
         ref['domain_id'] = domain_id
         ref['parent_id'] = parent_id
+        ref['domainess'] = domainess
         return ref
 
     def new_user_ref(self, domain_id, project_id=None):
@@ -1077,6 +1078,9 @@ class RestfulTestCase(tests.SQLDriverOverrides, rest.RestfulTestCase,
             if ref['scope'].get('domain'):
                 self.assertEqual(ref['scope']['domain']['id'],
                                  entity['scope']['domain']['id'])
+            if ref['scope'].get('OS-INHERIT:inherited_to'):
+                self.assertEqual(ref['scope']['OS-INHERIT:inherited_to'],
+                                 entity['scope']['OS-INHERIT:inherited_to'])
         if url:
             self.assertIn(url, entity['links']['assignment'])
 

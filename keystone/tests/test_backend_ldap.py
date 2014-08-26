@@ -257,6 +257,12 @@ class BaseLDAPIdentity(test_backend.IdentityTests):
     def test_delete_group_with_user_project_domain_links(self):
         self.skipTest('N/A: LDAP does not support multiple domains')
 
+    def test_inherited_grant_for_user_on_project_crud(self):
+        self.skipTest('N/A: LDAP does not support multiple domains')
+
+    def test_inherited_grant_for_group_on_project_crud(self):
+        self.skipTest('N/A: LDAP does not support multiple domains')
+
     def test_list_projects_for_user(self):
         domain = self._get_domain_fixture()
         user1 = {'name': uuid.uuid4().hex, 'password': uuid.uuid4().hex,
@@ -422,6 +428,9 @@ class BaseLDAPIdentity(test_backend.IdentityTests):
         self.skipTest('Blocked by bug: 1390125')
 
     def test_domain_delete_hierarchy(self):
+        self.skipTest('Domains are read-only against LDAP')
+
+    def test_create_project_domainess(self):
         self.skipTest('Domains are read-only against LDAP')
 
     def test_list_role_assignments_unfiltered(self):

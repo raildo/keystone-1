@@ -2048,7 +2048,8 @@ class IdentityTests(object):
                    'domain_id': domain_id,
                    'enabled': True,
                    'name': uuid.uuid4().hex,
-                   'parent_id': None}
+                   'parent_id': None,
+                   'domainess': False}
         self.assignment_api.create_project(project_id, project)
 
         projects = [project]
@@ -2058,12 +2059,26 @@ class IdentityTests(object):
                            'domain_id': domain_id,
                            'enabled': True,
                            'name': uuid.uuid4().hex,
-                           'parent_id': project_id}
+                           'parent_id': project_id,
+                           'domainess': False}
             self.assignment_api.create_project(new_project['id'], new_project)
             projects.append(new_project)
             project_id = new_project['id']
 
         return projects
+
+    def test_create_project_domainess(self):
+        project_id = uuid.uuid4().hex
+        project_domainess = {'id': project_id,
+                             'description': '',
+                             'domain_id': DEFAULT_DOMAIN_ID,
+                             'enabled': True,
+                             'name': uuid.uuid4().hex,
+                             'parent_id': None,
+                             'domainess': True}
+        p = self.assignment_api.create_project(project_id, project_domainess)
+        domain = self.assignment_api.get_domain(project_id)
+        self.assertEqual(p['id'], domain['id'])
 
     def test_check_leaf_projects(self):
         projects_hierarchy = self._create_projects_hierarchy()

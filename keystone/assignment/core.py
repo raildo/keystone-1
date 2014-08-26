@@ -98,6 +98,7 @@ class Manager(manager.Manager):
         tenant['enabled'] = clean.project_enabled(tenant['enabled'])
         tenant.setdefault('description', '')
         tenant.setdefault('parent_id', None)
+        tenant.setdefault('domainess', False)
 
         if tenant.get('parent_id') is not None:
             parent_ref = self.get_project(tenant.get('parent_id'))
@@ -115,6 +116,9 @@ class Manager(manager.Manager):
                                  'project: %s') % ref['id'])
             self._assert_max_hierarchy_depth(tenant.get('parent_id'),
                                              parents_list)
+        if tenant.get('domainess', True):
+            domain = {'id':tenant_id, 'name': tenant.get('name'), 'enabled': True}
+            self.create_domain(tenant_id, domain)
 
         ret = self.driver.create_project(tenant_id, tenant)
         if SHOULD_CACHE(ret):
@@ -239,18 +243,24 @@ class Manager(manager.Manager):
         """
         def _get_group_project_roles(user_id, project_ref):
             group_ids = self._get_group_ids_for_user_id(user_id)
+            # NOTE(samuelmz): Only SQL backend returns roles inherited
+            # from a parent project.
             return self.driver.get_group_project_roles(
                 group_ids,
                 project_ref['id'],
                 project_ref['domain_id'])
 
+        def _user_project_roles(user_id, project_id):
+            metadata_ref = self._get_metadata(user_id=user_id,
+                                              tenant_id=project_id)
+            role_list = self._roles_from_role_dicts(
+                metadata_ref.get('roles', {}), False)
+            return role_list
+
         def _get_user_project_roles(user_id, project_ref):
             role_list = []
             try:
-                metadata_ref = self._get_metadata(user_id=user_id,
-                                                  tenant_id=project_ref['id'])
-                role_list = self._roles_from_role_dicts(
-                    metadata_ref.get('roles', {}), False)
+                role_list = _user_project_roles(user_id, project_ref['id'])
             except exception.MetadataNotFound:
                 pass
 
@@ -263,6 +273,12 @@ class Manager(manager.Manager):
                         metadata_ref.get('roles', {}), True)
                 except (exception.MetadataNotFound, exception.NotImplemented):
                     pass
+                # As well as inherited roles from parent projects
+                for p in self.list_project_parents(project_ref['id']):
+                    p_roles = self.list_grants(
+                        user_id=user_id, project_id=p['id'],
+                        inherited_to_projects=True)
+                    role_list += [x['id'] for x in p_roles]
 
             return role_list
 

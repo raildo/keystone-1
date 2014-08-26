@@ -783,7 +783,7 @@
 # domain need to be placed in the domain specific
 # configuration file. This feature is disabled by default; set
 # to true to enable. (boolean value)
-#domain_specific_drivers_enabled=false
+# domain_specific_drivers_enabled=false
 
 # Path for Keystone to locate the domain specific identity
 # configuration files if domain_specific_drivers_enabled is

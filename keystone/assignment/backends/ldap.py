@@ -103,6 +103,9 @@ class Assignment(assignment.Driver):
         # project will always be a root and a leaf at the same time
         return True
 
+    def test_create_project_domainess(self):
+        return []
+
     def get_project_by_name(self, tenant_name, domain_id):
         self._validate_default_domain_id(domain_id)
         return self._set_default_attributes(
@@ -353,10 +356,6 @@ class Assignment(assignment.Driver):
             self.get_domain(domain_id)
         if project_id:
             self.get_project(project_id)
-
-        if project_id and inherited_to_projects:
-            msg = _('Inherited roles can only be assigned to domains')
-            raise exception.Conflict(type='role grant', details=msg)
 
         try:
             metadata_ref = self._get_metadata(user_id, project_id,

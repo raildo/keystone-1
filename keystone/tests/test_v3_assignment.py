@@ -37,10 +37,6 @@ def _build_role_assignment_url_and_entity(
         entity = {'role': {'id': role_id},
                   'user': {'id': user_id},
                   'scope': {'domain': {'id': domain_id}}}
-        if inherited_to_projects:
-            url = '/OS-INHERIT%s/inherited_to_projects' % url
-            if not effective:
-                entity['OS-INHERIT:inherited_to'] = 'projects'
     elif user_id and project_id:
         url = ('/projects/%(project_id)s/users/%(user_id)s'
                '/roles/%(role_id)s' % {
@@ -59,10 +55,6 @@ def _build_role_assignment_url_and_entity(
         entity = {'role': {'id': role_id},
                   'group': {'id': group_id},
                   'scope': {'domain': {'id': domain_id}}}
-        if inherited_to_projects:
-            url = '/OS-INHERIT%s/inherited_to_projects' % url
-            if not effective:
-                entity['OS-INHERIT:inherited_to'] = 'projects'
     elif group_id and project_id:
         url = ('/projects/%(project_id)s/groups/%(group_id)s'
                '/roles/%(role_id)s' % {
@@ -72,6 +64,10 @@ def _build_role_assignment_url_and_entity(
         entity = {'role': {'id': role_id},
                   'group': {'id': group_id},
                   'scope': {'project': {'id': project_id}}}
+    if inherited_to_projects:
+        url = '/OS-INHERIT%s/inherited_to_projects' % url
+        if not effective:
+            entity['OS-INHERIT:inherited_to'] = 'projects'
     return (url, entity)
 
 
@@ -515,6 +511,30 @@ class AssignmentTestCase(test_v3.RestfulTestCase):
             projects.append(resp.result)
 
         return projects
+
+    def test_v3_create_project_domainess(self):
+        """Call ``POST /projects`` with the domainess concept."""
+
+        ref = self.new_project_ref(domain_id=self.domain_id, domainess=True)
+        resp = self.post(
+            '/projects',
+            body={'project': ref})
+        self.assertValidProjectResponse(resp, ref)
+
+        resp = [resp.result]
+        project_id = resp[0]['project']['id']
+
+        resp_domain = self.get('/domains/%(domain_id)s' % {
+            'domain_id': project_id})
+
+        domain  = [resp_domain.result]
+        domain_id =  domain[0]['domain']['id']
+
+        user = self.new_user_ref(domain_id=domain_id)
+        password = user['password']
+        user = self.identity_api.create_user(user)
+        user['password'] = password
+        self.assertEqual(domain_id, user['domain_id'])
 
     def test_create_hierarchical_project(self):
         """Call ``POST /projects``."""
@@ -1949,6 +1969,274 @@ class AssignmentInheritanceTestCase(test_v3.RestfulTestCase):
             role_id=role_list[4]['id'], inherited_to_projects=True)
         self.assertRoleAssignmentInListResponse(r, ud_entity, link_url=ud_url)
         self.assertRoleAssignmentInListResponse(r, gd_entity, link_url=gd_url)
+
+    def _setup_hierarchical_projects_scenario(self):
+        """Creates basic hierarchical projects scenario
+
+        Creates a root and a leaf project and non-inherited and inherited
+        roles as well.
+
+        """
+        # Create project hierarchy
+        root = self.new_project_ref(domain_id=self.domain['id'])
+        leaf = self.new_project_ref(domain_id=self.domain['id'],
+                                    parent_id=root['id'])
+
+        self.assignment_api.create_project(root['id'], root)
+        self.assignment_api.create_project(leaf['id'], leaf)
+
+        # Create 'non-inherited' and 'inherited' roles
+        non_inherited_role = {'id': uuid.uuid4().hex, 'name': 'non-inherited'}
+        self.assignment_api.create_role(non_inherited_role['id'],
+                                        non_inherited_role)
+        inherited_role = {'id': uuid.uuid4().hex, 'name': 'inherited'}
+        self.assignment_api.create_role(inherited_role['id'], inherited_role)
+
+        return (root['id'], leaf['id'],
+                non_inherited_role['id'], inherited_role['id'])
+
+    def test_get_token_from_inherited_user_project_role_grants(self):
+        # Create default scenario
+        root_id, leaf_id, non_inherited_role_id, inherited_role_id = (
+            self._setup_hierarchical_projects_scenario())
+
+        # Define root and leaf projects authentication data
+        root_project_auth_data = self.build_authentication_request(
+            user_id=self.user['id'],
+            password=self.user['password'],
+            project_id=root_id)
+        leaf_project_auth_data = self.build_authentication_request(
+            user_id=self.user['id'],
+            password=self.user['password'],
+            project_id=leaf_id)
+
+        # Check the user cannot get a token on root nor leaf project
+        self.v3_authenticate_token(root_project_auth_data, expected_status=401)
+        self.v3_authenticate_token(leaf_project_auth_data, expected_status=401)
+
+        # Grant non-inherited role for user on leaf project
+        non_inher_up_url, non_inher_up_entity = (
+            _build_role_assignment_url_and_entity(
+                project_id=leaf_id, user_id=self.user['id'],
+                role_id=non_inherited_role_id))
+        self.put(non_inher_up_url)
+
+        # Check the user can only get a token on leaf project
+        self.v3_authenticate_token(root_project_auth_data, expected_status=401)
+        self.v3_authenticate_token(leaf_project_auth_data)
+
+        # Grant inherited role for user on root project
+        inher_up_url, inher_up_entity = _build_role_assignment_url_and_entity(
+            project_id=root_id, user_id=self.user['id'],
+            role_id=inherited_role_id, inherited_to_projects=True)
+        self.put(inher_up_url)
+
+        # Check the user still can get a token only on leaf project
+        self.v3_authenticate_token(root_project_auth_data, expected_status=401)
+        self.v3_authenticate_token(leaf_project_auth_data)
+
+        # Delete non-inherited grant
+        self.delete(non_inher_up_url)
+
+        # Check the inherited role still applies for leaf project
+        self.v3_authenticate_token(root_project_auth_data, expected_status=401)
+        self.v3_authenticate_token(leaf_project_auth_data)
+
+        # Delete inherited grant
+        self.delete(inher_up_url)
+
+        # Check the user cannot get a token on leaf project anymore
+        self.v3_authenticate_token(leaf_project_auth_data, expected_status=401)
+
+    def test_get_token_from_inherited_group_project_role_grants(self):
+        # Create default scenario
+        root_id, leaf_id, non_inherited_role_id, inherited_role_id = (
+            self._setup_hierarchical_projects_scenario())
+
+        # Create group and add user to it
+        group = self.new_group_ref(domain_id=self.domain['id'])
+        group = self.identity_api.create_group(group)
+        self.identity_api.add_user_to_group(self.user['id'], group['id'])
+
+        # Define root and leaf projects authentication data
+        root_project_auth_data = self.build_authentication_request(
+            user_id=self.user['id'],
+            password=self.user['password'],
+            project_id=root_id)
+        leaf_project_auth_data = self.build_authentication_request(
+            user_id=self.user['id'],
+            password=self.user['password'],
+            project_id=leaf_id)
+
+        # Check the user cannot get a token on root nor leaf project
+        self.v3_authenticate_token(root_project_auth_data, expected_status=401)
+        self.v3_authenticate_token(leaf_project_auth_data, expected_status=401)
+
+        # Grant non-inherited role for group on leaf project
+        non_inher_gp_url, non_inher_gp_entity = (
+            _build_role_assignment_url_and_entity(
+                project_id=leaf_id, group_id=group['id'],
+                role_id=non_inherited_role_id))
+        self.put(non_inher_gp_url)
+
+        # Check the user can only get a token on leaf project
+        self.v3_authenticate_token(root_project_auth_data, expected_status=401)
+        self.v3_authenticate_token(leaf_project_auth_data)
+
+        # Grant inherited role for group on root project
+        inher_gp_url, inher_gp_entity = _build_role_assignment_url_and_entity(
+            project_id=root_id, group_id=group['id'],
+            role_id=inherited_role_id, inherited_to_projects=True)
+        self.put(inher_gp_url)
+
+        # Check the user still can get a token only on leaf project
+        self.v3_authenticate_token(root_project_auth_data, expected_status=401)
+        self.v3_authenticate_token(leaf_project_auth_data)
+
+        # Delete no-inherited grant
+        self.delete(non_inher_gp_url)
+
+        # Check the inherited role still applies for leaf project
+        self.v3_authenticate_token(leaf_project_auth_data)
+
+        # Delete inherited grant
+        self.delete(inher_gp_url)
+
+        # Check the user cannot get a token on leaf project anymore
+        self.v3_authenticate_token(leaf_project_auth_data, expected_status=401)
+
+    def test_get_role_assignments_for_project_hierarchy(self):
+        # Create default scenario
+        root_id, leaf_id, non_inherited_role_id, inherited_role_id = (
+            self._setup_hierarchical_projects_scenario())
+
+        # Grant non-inherited role
+        non_inher_up_url, non_inher_up_entity = (
+            _build_role_assignment_url_and_entity(
+                project_id=root_id, user_id=self.user['id'],
+                role_id=non_inherited_role_id))
+        self.put(non_inher_up_url)
+
+        # Grant inherited role
+        inher_up_url, inher_up_entity = _build_role_assignment_url_and_entity(
+            project_id=root_id, user_id=self.user['id'],
+            role_id=inherited_role_id, inherited_to_projects=True)
+        self.put(inher_up_url)
+
+        # Get role assignments
+        collection_url = '/role_assignments'
+        r = self.get(collection_url)
+        self.assertValidRoleAssignmentListResponse(r,
+                                                   resource_url=collection_url)
+
+        # Assert that the user has non-inherited role on root project
+        self.assertRoleAssignmentInListResponse(r, non_inher_up_entity,
+                                                non_inher_up_url)
+
+        # Assert that the user does not have inherited role on root project
+        self.assertRoleAssignmentNotInListResponse(r, inher_up_entity,
+                                                   inher_up_url)
+
+        # Assert that the user does not have non-inherited role on leaf project
+        non_inher_up_url = ('/projects/%s/users/%s/roles/%s' %
+                            (leaf_id, self.user['id'], non_inherited_role_id))
+        non_inher_up_entity['scope']['project']['id'] = leaf_id
+        self.assertRoleAssignmentNotInListResponse(r, non_inher_up_entity,
+                                                   non_inher_up_url)
+
+        # Assert that the user does not have inherited role on leaf project
+        inher_up_entity['scope']['project']['id'] = leaf_id
+        self.assertRoleAssignmentNotInListResponse(r, inher_up_entity,
+                                                   inher_up_url)
+
+    def test_get_effective_role_assignments_for_project_hierarchy(self):
+        # Create default scenario
+        root_id, leaf_id, non_inherited_role_id, inherited_role_id = (
+            self._setup_hierarchical_projects_scenario())
+
+        # Grant non-inherited role
+        non_inher_up_url, non_inher_up_entity = (
+            _build_role_assignment_url_and_entity(
+                project_id=root_id, user_id=self.user['id'],
+                role_id=non_inherited_role_id))
+        self.put(non_inher_up_url)
+
+        # Grant inherited role
+        inher_up_url, inher_up_entity = _build_role_assignment_url_and_entity(
+            project_id=root_id, user_id=self.user['id'],
+            role_id=inherited_role_id, inherited_to_projects=True)
+        self.put(inher_up_url)
+
+        # Get effective role assignments
+        collection_url = '/role_assignments?effective'
+        r = self.get(collection_url)
+        self.assertValidRoleAssignmentListResponse(r,
+                                                   resource_url=collection_url)
+
+        # Assert that the user has non-inherited role on root project
+        self.assertRoleAssignmentInListResponse(r, non_inher_up_entity,
+                                                non_inher_up_url)
+
+        # Assert that the user does not have inherited role on root project
+        self.assertRoleAssignmentNotInListResponse(r, inher_up_entity,
+                                                   inher_up_url)
+
+        # Assert that the user does not have non-inherited role on leaf project
+        non_inher_up_url = ('/projects/%s/users/%s/roles/%s' %
+                            (leaf_id, self.user['id'], non_inherited_role_id))
+        non_inher_up_entity['scope']['project']['id'] = leaf_id
+        self.assertRoleAssignmentNotInListResponse(r, non_inher_up_entity,
+                                                   non_inher_up_url)
+
+        # Assert that the user has inherited role on leaf project
+        inher_up_entity['scope']['project']['id'] = leaf_id
+        self.assertRoleAssignmentInListResponse(r, inher_up_entity,
+                                                inher_up_url)
+
+    def test_get_inherited_role_assignments_for_project_hierarchy(self):
+        # Create default scenario
+        root_id, leaf_id, non_inherited_role_id, inherited_role_id = (
+            self._setup_hierarchical_projects_scenario())
+
+        # Grant non-inherited role
+        non_inher_up_url, non_inher_up_entity = (
+            _build_role_assignment_url_and_entity(
+                project_id=root_id, user_id=self.user['id'],
+                role_id=non_inherited_role_id))
+        self.put(non_inher_up_url)
+
+        # Grant inherited role
+        inher_up_url, inher_up_entity = _build_role_assignment_url_and_entity(
+            project_id=root_id, user_id=self.user['id'],
+            role_id=inherited_role_id, inherited_to_projects=True)
+        self.put(inher_up_url)
+
+        # Get inherited role assignments
+        collection_url = ('/role_assignments'
+                          '?scope.OS-INHERIT:inherited_to=projects')
+        r = self.get(collection_url)
+        self.assertValidRoleAssignmentListResponse(r,
+                                                   resource_url=collection_url)
+
+        # Assert that the user does not have non-inherited role on root project
+        self.assertRoleAssignmentNotInListResponse(r, non_inher_up_entity,
+                                                   non_inher_up_url)
+
+        # Assert that the user has inherited role on root project
+        self.assertRoleAssignmentInListResponse(r, inher_up_entity,
+                                                inher_up_url)
+
+        # Assert that the user does not have non-inherited role on leaf project
+        non_inher_up_url = ('/projects/%s/users/%s/roles/%s' %
+                            (leaf_id, self.user['id'], non_inherited_role_id))
+        non_inher_up_entity['scope']['project']['id'] = leaf_id
+        self.assertRoleAssignmentNotInListResponse(r, non_inher_up_entity,
+                                                   non_inher_up_url)
+
+        # Assert that the user does not have inherited role on leaf project
+        inher_up_entity['scope']['project']['id'] = leaf_id
+        self.assertRoleAssignmentNotInListResponse(r, inher_up_entity,
+                                                   inher_up_url)
 
 
 class AssignmentInheritanceDisabledTestCase(test_v3.RestfulTestCase):
