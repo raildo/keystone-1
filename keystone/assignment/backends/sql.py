@@ -341,6 +341,41 @@ class Assignment(keystone_assignment.Driver):
                 children = self._get_children(session, children_ids)
             return subtree
 
+    def _get_branch_hierarchy(self, session, project_id):
+        branch = {}
+        children = self._get_children(session, [project_id])
+        for ref in children:
+            branch[ref['id']] = self._get_branch_hierarchy(session, ref['id'])
+        return branch
+
+    def get_project_hierarchy_subtree(self, project_id):
+        with sql.transaction() as session:
+            children = self._get_children(session, [project_id])
+            subtree = {}
+            for ref in children:
+                subtree[ref['id']] = self._get_branch_hierarchy(
+                    session, ref['id'])
+            return subtree
+
+    def _get_parent_hierarchy(self, project_id, parents_list):
+        parents = {}
+        for project in parents_list:
+            if project['parent_id'] is not None:
+                parent_project_id = project['parent_id']
+                parents[parent_project_id] = self._get_parent_hierarchy(parent_project_id, parents_list)
+        return parents
+
+    def get_project_hierarchy_parents(self, project_id):
+            parents_list = self.list_project_parents(project_id)
+            parents = {}
+            for project in parents_list:
+                if project['parent_id'] is not None:
+                    parent_project_id = project['parent_id']
+                    parents[project['id']] = parent_project_id
+                else:
+                    parents[project['id']] = {}
+            return parents
+
     def list_project_parents(self, project_id):
         with sql.transaction() as session:
             project = self._get_project(session, project_id).to_dict()

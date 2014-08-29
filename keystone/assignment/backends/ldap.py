@@ -79,6 +79,16 @@ class Assignment(assignment.Driver):
         # any domain specified
         return self.list_projects(driver_hints.Hints())
 
+    def get_project_hierarchy_subtree(self, project_id):
+        # We don't support projects hierarchy within this driver, so a
+        # project will never have children
+        return {}
+
+    def get_project_hierarchy_parents(self, project_id):
+        # We don't support projects hierarchy within this driver, so a
+        # project will never have parents
+        return {}
+
     def list_projects_in_subtree(self, project_id):
         # We don't support projects hierarchy within this driver, so a
         # project will never have children
