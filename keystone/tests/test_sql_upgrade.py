@@ -1475,6 +1475,60 @@ class SqlUpgradeTests(SqlMigrateBase):
                                 ['id', 'name', 'extra', 'description',
                                  'enabled', 'domain_id'])
 
+    def test_domain_as_project_upgrade(self):
+        session = self.Session()
+        '''beta = {
+            'description': 'domain beta',
+            'enabled': True,
+            'name': uuid.uuid4().hex
+        }
+        acme = {
+            'description': 'domain acme',
+            'enabled': True,
+            'name': uuid.uuid4().hex
+        }'''
+        base_data = {}
+        domain_table = sqlalchemy.Table('domain', self.metadata, autoload=True)
+        # Create a Domain
+        base_data['domain'] = {'id': uuid.uuid4().hex,
+                               'name': uuid.uuid4().hex,
+                               'enabled': True}
+        session.execute(domain_table.insert().values(base_data['domain']))
+
+        # Create another Domain
+        base_data['domain2'] = {'id': uuid.uuid4().hex,
+                                'name': uuid.uuid4().hex,
+                                'enabled': True}
+        session.execute(domain_table.insert().values(base_data['domain2']))
+        self.assertEqual(2, session.query(domain_table).count())
+        self.upgrade(62)
+        proj_table = sqlalchemy.Table('project', self.metadata, autoload=True)
+        self.assertEqual(2, session.query(proj_table).count())
+
+
+    def test_domain_as_project_downgrade(self):
+        session = self.Session()
+        beta = {
+            "description": "domain beta",
+            'enabled': True,
+            'name': uuid.uuid4().hex
+        }
+        acme = {
+            "description": "domain acme",
+            'enabled': True,
+            'name': uuid.uuid4().hex
+        }
+        self.insert_dict(session, 'domain', beta)
+        self.insert_dict(session, 'domain', acme)
+        domain_table = sqlalchemy.Table('domain', self.metadata, autoload=True)
+        self.assertEqual(2, session.query(domain_table).count())
+        self.upgrade(62)
+        proj_table = sqlalchemy.Table('project', self.metadata, autoload=True)
+        self.assertEqual(2, session.query(proj_table).count())
+        self.downgrade(61)
+        self.assertEqual(2, session.query(domain_table).count())
+        self.assertEqual(0, session.query(proj_table).count())
+
     def test_project_parent_id_cleanup(self):
         # make sure that the parent_id field is dropped in the downgrade
         self.upgrade(61)

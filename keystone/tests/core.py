@@ -391,6 +391,7 @@ class TestCase(BaseTestCase):
                                               side_effect=BadLog))
         self.config_fixture = self.useFixture(config_fixture.Config(CONF))
         self.config(self.config_files())
+        self.domain_is_a_project = True
 
         # NOTE(morganfainberg): mock the auth plugin setup to use the config
         # fixture which automatically unregisters options when performing
@@ -490,6 +491,7 @@ class TestCase(BaseTestCase):
         # from this instance during cleanup
         fixtures_to_cleanup = []
 
+        domain_projects = []
         # TODO(termie): doing something from json, probably based on Django's
         #               loaddata will be much preferred.
         if hasattr(self, 'identity_api') and hasattr(self, 'assignment_api'):
@@ -501,6 +503,13 @@ class TestCase(BaseTestCase):
                     rv = self.assignment_api.get_domain(domain['id'])
                 except exception.NotImplemented:
                     rv = domain
+
+                try:
+                    domain_projects.append(
+                        self.assignment_api.get_project(domain['id']))
+                except exception.ProjectNotFound:
+                    # LDAP backend does not support project as a domain
+                    pass
                 attrname = 'domain_%s' % domain['id']
                 setattr(self, attrname, rv)
                 fixtures_to_cleanup.append(attrname)
@@ -558,6 +567,8 @@ class TestCase(BaseTestCase):
                 setattr(self, attrname, user_copy)
                 fixtures_to_cleanup.append(attrname)
 
+            self.TENANTS = copy.deepcopy(fixtures.TENANTS)
+            self.TENANTS.extend(domain_projects)
             self.addCleanup(self.cleanup_instance(*fixtures_to_cleanup))
 
     def _paste_config(self, config):

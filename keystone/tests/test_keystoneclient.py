@@ -373,7 +373,8 @@ class ClientDrivenTestCase(tests.TestCase):
         # Admin endpoint should return *all* tenants
         client = self.get_client(admin=True)
         tenants = client.tenants.list()
-        self.assertEqual(len(default_fixtures.TENANTS), len(tenants))
+        # +1 because domain has root project.
+        self.assertEqual(len(default_fixtures.TENANTS) + 1, len(tenants))
 
     def test_invalid_password(self):
         good_client = self._client(username=self.user_foo['name'],

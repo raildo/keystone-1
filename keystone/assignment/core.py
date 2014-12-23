@@ -427,6 +427,20 @@ class Manager(manager.Manager):
         if SHOULD_CACHE(ret):
             self.get_domain.set(ret, self, domain_id)
             self.get_domain_by_name.set(ret, self, ret['name'])
+
+        root_project = {
+            'id': domain_id,
+            'name': domain['name'],
+            'description': 'domain root project',
+            'domain_id': domain_id,
+            'enabled': True}
+
+        pro = self.driver.create_project(domain_id, root_project)
+        if SHOULD_CACHE(pro):
+            self.get_project.set(pro, self, domain_id)
+            self.get_project_by_name.set(pro, self, ret['name'],
+                                         pro['domain_id'])
+
         return ret
 
     @manager.response_truncated

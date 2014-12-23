@@ -59,6 +59,7 @@ class BaseLDAPIdentity(test_backend.IdentityTests):
         common_ldap.register_handler('fake://', fakeldap.FakeLdap)
         self.load_backends()
         self.load_fixtures(default_fixtures)
+        self.domain_is_a_project = False
 
         self.addCleanup(common_ldap_core._HANDLERS.clear)
 
@@ -1930,6 +1931,9 @@ class LDAPIdentity(BaseLDAPIdentity, tests.TestCase):
         self.assertEqual('crap', user_ref['id'])
         self.assertEqual('Foo Bar', user_ref['name'])
 
+    def test_list_projects(self):
+        self._test_list_projects(4)
+
 
 class LDAPIdentityEnabledEmulation(LDAPIdentity):
     def setUp(self):
@@ -2109,6 +2113,12 @@ class LdapIdentitySqlAssignment(BaseLDAPIdentity, tests.SQLDriverOverrides,
         self.load_fixtures(default_fixtures)
         # defaulted by the data load
         self.user_foo['enabled'] = True
+
+    def test_list_projects(self):
+        self._test_list_projects(5)
+
+    def test_list_projects_for_domain(self):
+        self._test_list_projects_for_domain(5)
 
     def config_overrides(self):
         super(LdapIdentitySqlAssignment, self).config_overrides()
@@ -2376,7 +2386,7 @@ class MultiLDAPandSQLIdentity(BaseLDAPIdentity, tests.SQLDriverOverrides,
         super(MultiLDAPandSQLIdentity, self).setUp()
 
         self.load_backends()
-
+        self.domain_is_a_project = True
         self.engine = sql.get_engine()
         self.addCleanup(sql.cleanup)
 
@@ -2749,6 +2759,12 @@ class DomainSpecificLDAPandSQLIdentity(
             self.identity_api.list_users(
                 domain_scope=self.domains['domain1']['id']),
             matchers.HasLength(1))
+
+    def test_list_projects(self):
+        self._test_list_projects(6)
+
+    def test_list_projects_for_domain(self):
+        self._test_list_projects(6)
 
     def test_add_role_grant_to_user_and_project_404(self):
         self.skipTest('Blocked by bug 1101287')

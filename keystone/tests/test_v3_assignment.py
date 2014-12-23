@@ -101,6 +101,17 @@ class AssignmentTestCase(test_v3.RestfulTestCase):
             body={'domain': ref})
         return self.assertValidDomainResponse(r, ref)
 
+    def test_create_domain_creates_root_project(self):
+        """Call ``POST /domains``."""
+        ref = self.new_domain_ref()
+        r = self.post(
+            '/domains',
+            body={'domain': ref})
+        domain = self.assertValidDomainResponse(r, ref)
+        project = self.assignment_api.get_project(domain['id'])
+        self.assertEqual(project['id'], domain['id'])
+        self.assertEqual(project['domain_id'], domain['id'])
+
     def test_create_domain_case_sensitivity(self):
         """Call `POST /domains`` twice with upper() and lower() cased name."""
         ref = self.new_domain_ref()

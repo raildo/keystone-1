@@ -1083,15 +1083,18 @@ class FederatedTokenTests(FederationTests):
                  self.tokens['ADMIN_ASSERTION'])
 
         self.config_fixture.config(group='os_inherit', enabled=True)
+        # Roles inherited from the domains will pick up the
+        # domain root project as well.
         projects_refs = (set([self.proj_customers['id'],
-                              self.project_inherited['id']]),
+                              self.project_inherited['id'],
+                              self.project_inherited['domain_id']],),
                          set([self.proj_employees['id'],
-                              self.project_all['id']]),
+                              self.project_all['id']],),
                          set([self.proj_employees['id'],
                               self.project_all['id'],
                               self.proj_customers['id'],
-                              self.project_inherited['id']]))
-
+                              self.project_inherited['id'],
+                              self.project_inherited['domain_id']],))
         for token, projects_ref in zip(token, projects_refs):
             for url in urls:
                 r = self.get(url, token=token)

@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-
+import copy
 import uuid
 
 from keystone.assignment import controllers
@@ -73,17 +73,22 @@ class TenantTestCase(tests.TestCase):
         project1 = {'id': uuid.uuid4().hex, 'name': uuid.uuid4().hex,
                     'domain_id': domain['id']}
         self.assignment_api.create_project(project1['id'], project1)
-        # Check the real total number of projects, we should have the above
-        # plus those in the default features
-        refs = self.assignment_api.list_projects()
-        self.assertEqual(len(default_fixtures.TENANTS) + 1, len(refs))
 
-        # Now list all projects using the v2 API - we should only get
-        # back those in the default features, since only those are in the
+        # list all projects using the v2 API - we should only get
+        # back those in the default fixtures, since only those are in the
         # default domain.
         refs = self.tenant_controller.get_all_projects(_ADMIN_CONTEXT)
-        self.assertEqual(len(default_fixtures.TENANTS), len(refs['tenants']))
-        for tenant in default_fixtures.TENANTS:
+        self.assertEqual(len(self.TENANTS), len(refs['tenants']))
+        for tenant in self.TENANTS:
             tenant_copy = tenant.copy()
             tenant_copy.pop('domain_id')
             self.assertIn(tenant_copy, refs['tenants'])
+
+        # Check the real total number of projects, we should have the above
+        # plus those in the default features
+        domain_root_project = copy.copy(domain)
+        domain_root_project['domain_id'] = domain['id']
+        self.TENANTS.append(domain_root_project)
+        self.TENANTS.append(project1)
+        refs = self.assignment_api.list_projects()
+        self.assertEqual(len(self.TENANTS), len(refs))

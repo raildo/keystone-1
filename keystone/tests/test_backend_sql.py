@@ -130,6 +130,12 @@ class SqlIdentity(SqlTests, test_backend.IdentityTests):
         user_ref = self.identity_api._get_user(session, self.user_foo['id'])
         self.assertNotEqual(user_ref['password'], self.user_foo['password'])
 
+    def test_list_projects(self):
+        self._test_list_projects(5)
+
+    def test_list_projects_for_domain(self):
+        self._test_list_projects_for_domain(5)
+
     def test_delete_user_with_project_association(self):
         user = {'name': uuid.uuid4().hex,
                 'domain_id': DEFAULT_DOMAIN_ID,
